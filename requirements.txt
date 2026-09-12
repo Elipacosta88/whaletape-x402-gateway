@@ -1,0 +1,26 @@
+# Versions pinned to the ones running in production on whaletape.xyz
+# (read from the live venv on 2026-09-12).
+
+# The x402 SDK. 2.21 was the first release that handled hexbytes 2.0
+# (HexBytes.hex() lost the 0x prefix) and was validated with a real payment on
+# Base. Anything older will refuse good signatures.
+x402[evm,fastapi,svm]==2.22.0
+
+fastapi==0.141.1
+uvicorn==0.52.4
+python-dotenv==1.2.3
+httpx==0.28.1
+pydantic==2.13.5
+
+# Solana. The SDK imports `solana.rpc.api` (the sync client), which solana-py
+# 0.40 removed. Keep it below 0.40 until the SDK catches up.
+solana==0.39.0
+solders==0.27.1
+
+# Validates the x402 extensions (bazaar/facilitator). Without it the server
+# dies at import time with ImportError -- it is an optional dependency of the
+# SDK that is not optional in practice.
+jsonschema==4.26.0
+
+# CDP facilitator authentication (JWT per request). Only needed on mainnet.
+cdp-sdk==1.48.1
