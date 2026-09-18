@@ -145,6 +145,28 @@ does not verify or settle Algorand.
 Set `ALGORAND_GATEWAY_URL` to the base URL of your own AVM gateway (for
 example `http://127.0.0.1:8080`) to advertise and settle for real.
 
+### Paying in Algorand (the buyer side)
+
+`example_buyer_algorand.py` is a complete, working client. It exists because
+the failure mode is silent: the official `x402` package ships no AVM signing
+mechanism, so a canonical client reading a five-network `accepts` skips the
+Algorand entry and pays elsewhere, and raises `NoMatchingRequirementsError` on
+a route that offers Algorand alone. Nothing looks broken from either side.
+
+Install `x402-avm` in its **own** virtualenv — it shadows `x402`:
+
+```bash
+python3 -m venv .venv-algo
+.venv-algo/bin/pip install x402-avm algosdk
+.venv-algo/bin/python example_buyer_algorand.py --dry-run https://your-gateway/coverage
+```
+
+`--dry-run` signs with a throwaway account that was never funded: nothing
+moves, yet the envelope is presented for real and the facilitator answers with
+a MainNet simulation error naming the missing ASA. That message, not the 402,
+is what proves the path is alive end to end — use it to check a deployment
+before putting money near it.
+
 ## Licence
 
 Business Source License 1.1. Non-production use is free; production use needs
