@@ -9,7 +9,9 @@ Como funciona
    Algorand -- copiada do 402 que o gateway emite para o mesmo caminho, para
    bater byte a byte (scheme, rede, valor, ASA, payTo, feePayer). O SDK do
    gateway casa o pagamento exatamente por esses campos.
-2. Requisicao COM pagamento cuja `accepted.network` comeca com `algorand:`:
+2. Requisicao COM pagamento cuja `accepted.network` comeca com `algorand:`
+   -- em `PAYMENT-SIGNATURE` ou em `X-PAYMENT`, porque o envelope v2 ja chegou
+   no cabecalho do v1 em producao, e o gateway so le o primeiro nome:
    nao passa pelo caixa da API (que nao sabe Algorand) -- vai inteira para o
    gateway em loopback, que verifica, liquida no GoPlausible, busca o dado
    aqui pelo desvio interno e responde. Devolvemos status, corpo,
@@ -35,6 +37,12 @@ import urllib.request
 URL_GATEWAY = os.getenv("ALGORAND_GATEWAY_URL") or "http://127.0.0.1:8080"
 PREFIXO = "/algo"
 CABECALHO_PAGAMENTO = "payment-signature"
+# O comprador pode apresentar o envelope v2 no cabecalho do v1. Nao e hipotese:
+# `payment_identity.py:60-71` registra a tentativa perdida em /whales em
+# 09/09/2026, que veio assim. Enquanto a caixa olhava so `payment-signature`,
+# um pagamento Algorand nesse formato nao era desviado -- caia no paywall da
+# API, que nao sabe Algorand, e virava recusa sem nada no log dizendo a rede.
+CABECALHO_PAGAMENTO_V1 = "x-payment"
 CABECALHO_REQUISITOS = "payment-required"
 CABECALHO_RESPOSTA = "payment-response"
 TEMPO_402_S = 3.0
@@ -67,6 +75,49 @@ def rede_do_pagamento(cabecalho: str | None) -> str | None:
 
 def e_pagamento_algorand(cabecalho: str | None) -> bool:
     return (rede_do_pagamento(cabecalho) or "").startswith("algorand:")
+
+
+# Marcador da linha que a API imprime quando um cliente apresenta pagamento.
+# `payment-desviado` quando a requisicao inteira vai pro gateway: ele imprime a
+# SUA propria `[x402 payment]` no log dele, e o traffic_log soma o delta dos
+# dois logs -- entao imprimir `[x402 payment]` aqui tambem conta UMA tentativa
+# como DUAS. Medido em 19/09/2026: as 08:49:00Z uma unica compra de /coverage
+# (1 evento `payment_sent` no funnel_log) deixou a linha em whaletape-api.log e
+# em whaletape-algo.log, e o ingest das 09:00 gravou hits=2. O PAYMENT_RE do
+# coletor exige `[x402 payment] version=`, entao o sufixo o cega sem esconder
+# nada de quem le o log -- o mesmo truque de `payment-teste` (X-Selfcheck).
+MARCADOR_CONTADO = "payment"
+MARCADOR_DESVIADO = "payment-desviado"
+
+
+def marcador_de_log(cabecalho: str | None) -> str:
+    """`payment-desviado` se o caixa vai mandar este pagamento pro gateway."""
+    return MARCADOR_DESVIADO if e_pagamento_algorand(cabecalho) else MARCADOR_CONTADO
+
+
+def pagamento_apresentado(cabecalhos) -> tuple:
+    """(envelope, nome do cabecalho em que veio), procurando nos DOIS nomes.
+
+    v2 primeiro: e o nome correto, e quem manda os dois quis mandar v2."""
+    por_nome = {k.lower(): v for k, v in cabecalhos or ()}
+    for nome in (CABECALHO_PAGAMENTO.encode(), CABECALHO_PAGAMENTO_V1.encode()):
+        if nome in por_nome:
+            return por_nome[nome].decode("latin-1"), nome
+    return None, None
+
+
+def com_pagamento_em_v2(cabecalhos, veio_em) -> list:
+    """Lista nova com o envelope sob `payment-signature`, seja qual for a origem.
+
+    Desviar nao basta: o SDK do gateway le SOMENTE `payment-signature` (ver
+    v1_middleware.py:14). Envelope que chegou em `X-PAYMENT` precisa ser
+    RENOMEADO, ou o gateway devolve 402 para um pagamento que existe. Renomeia
+    em vez de acrescentar: dois cabecalhos fariam o relato do gateway contar a
+    mesma tentativa duas vezes."""
+    if veio_em != CABECALHO_PAGAMENTO_V1.encode():
+        return list(cabecalhos)
+    return [(CABECALHO_PAGAMENTO.encode(), v) if k.lower() == veio_em else (k, v)
+            for k, v in cabecalhos]
 
 
 def accepts_do_402(cabecalho_gateway: str | None) -> list:
@@ -188,10 +239,10 @@ class CaixaAlgorandASGI:
         if scope.get("type") != "http":
             return await self.app(scope, receive, send)
         cabecalhos = scope.get("headers") or []
-        pagamento = next((v.decode("latin-1") for k, v in cabecalhos
-                          if k.lower() == CABECALHO_PAGAMENTO.encode()), None)
+        pagamento, veio_em = pagamento_apresentado(cabecalhos)
         if e_pagamento_algorand(pagamento):
-            return await self._atender_pelo_gateway(scope, receive, send, cabecalhos)
+            return await self._atender_pelo_gateway(
+                scope, receive, send, com_pagamento_em_v2(cabecalhos, veio_em))
         return await self._com_402_ampliado(scope, receive, send)
 
     async def _atender_pelo_gateway(self, scope, receive, send, cabecalhos):

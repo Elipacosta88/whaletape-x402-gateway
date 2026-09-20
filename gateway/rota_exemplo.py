@@ -53,6 +53,24 @@ def _normalizar(caminho: str) -> str:
 
 _POR_FORMA = {_normalizar(k): v for k, v in EXEMPLOS.items()}
 
+# Volta do concreto para o modelo. Existe porque o manifesto do gateway
+# Algorand publica a URL que funciona (`/coverage/BTC`) enquanto o catalogo
+# identifica a rota pelo modelo (`/coverage/[symbol]`): sem esta traducao as
+# cinco rotas parametrizadas nunca casavam e ficavam sem alternativa em rede
+# nenhuma (medido em 18/09/2026).
+_POR_CONCRETO = {_normalizar(v): k for k, v in EXEMPLOS.items()}
+
+
+def modelo(caminho: str | None) -> str | None:
+    """Caminho-modelo equivalente, ou o proprio caminho quando nao ha exemplo.
+
+    Ao contrario de `concreto()`, aqui devolver a entrada intacta e seguro: o
+    caminho sem parametro JA e o seu modelo. So `None` e vazio saem como vieram."""
+    if not caminho:
+        return caminho
+    return _POR_CONCRETO.get(_normalizar(caminho), caminho)
+
+
 
 def url_chamavel(site: str, caminho: str, prefixo: str = "") -> str:
     """URL que um agente consegue chamar de verdade, para o `resource`.
