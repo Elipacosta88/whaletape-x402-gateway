@@ -1,5 +1,5 @@
-# Versions pinned to the ones running in production on whaletape.xyz
-# (read from the live venv on 2026-09-12).
+# Versions this cut was built and tested with, read from the production venv
+# on 2026-09-12. Production has since moved to x402 2.24.0; 2.22.0 has no known advisory (OSV, checked 2026-10-11).
 
 # The x402 SDK. 2.21 was the first release that handled hexbytes 2.0
 # (HexBytes.hex() lost the 0x prefix) and was validated with a real payment on
