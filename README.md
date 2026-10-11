@@ -83,12 +83,19 @@ the JSON body of the same response.
 
 ## Buying from it
 
+```bash
+npm install @x402/fetch @x402/evm viem
+```
+
 ```js
-import { wrapFetchWithPayment } from "x402-fetch";
+import { wrapFetchWithPaymentFromConfig } from "@x402/fetch";
+import { ExactEvmScheme } from "@x402/evm";
 import { privateKeyToAccount } from "viem/accounts";
 
 const account = privateKeyToAccount(process.env.PRIVATE_KEY);
-const fetchWithPay = wrapFetchWithPayment(fetch, account);
+const fetchWithPay = wrapFetchWithPaymentFromConfig(fetch, {
+  schemes: [{ network: "eip155:*", client: new ExactEvmScheme(account) }],
+});
 
 const res = await fetchWithPay("https://whaletape.xyz/coverage");
 console.log(await res.json());
