@@ -30,8 +30,8 @@ DESCRIPTION = ("Example paid endpoint: returns the coverage summary of the "
 TAGS = ("x402", "market-data", "ai-agents", "example")
 
 OUTPUT_EXAMPLE = {
-    "asset_classes": ["crypto", "equity", "commodity"],
-    "markets": 214,
+    "asset_classes": ["crypto", "equity", "commodity", "fx", "index", "rates"],
+    "markets": 355,
     "oldest_sample": "2026-06-01T00:00:00Z",
     "generated_at": "2026-09-12T00:00:00Z",
 }
